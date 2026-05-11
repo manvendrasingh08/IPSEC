@@ -1,0 +1,466 @@
+																IPsec
+				                     =================================================================
+
+
+
+# IPSEC VPN COMPLETE NOTES (DETAILED + STRUCTURED)
+
+---
+
+1. WHAT IS VPN
+
+---
+
+A VPN (Virtual Private Network) creates a secure, encrypted connection over an untrusted network (Internet).
+
+Purpose:
+
+* Secure communication between two networks or users
+* Hide data from attackers
+* Enable remote access to private resources
+
+Types:
+
+* Site-to-Site VPN (office ↔ office)
+* Remote Access VPN (user ↔ office)
+
+---
+
+2. IPSEC OVERVIEW
+
+---
+
+IPSec (Internet Protocol Security) is a protocol suite used to secure IP communication.
+
+Works at:
+
+* Network Layer (Layer 3)
+
+Provides:
+
+1. Confidentiality (Encryption)
+2. Integrity (Hashing)
+3. Authentication (Identity verification)
+
+---
+
+3. CORE COMPONENTS OF IPSEC
+
+---
+
+1. IKE (Internet Key Exchange)
+
+   * Used for:
+
+     * Authentication
+     * Key exchange
+     * Tunnel setup
+
+2. ESP (Encapsulating Security Payload)
+
+   * Provides:
+
+     * Encryption
+     * Integrity
+     * Authentication
+
+3. AH (Authentication Header)
+
+   * Provides:
+
+     * Integrity
+     * Authentication
+   * Does NOT provide encryption
+
+4. SA (Security Association)
+
+   * Agreement between two devices:
+
+     * Encryption algorithm
+     * Hash algorithm
+     * Keys
+     * Lifetime
+
+5. Diffie-Hellman
+
+   * Key exchange mechanism
+   * Generates shared secret key
+
+6. NAT-T (NAT Traversal)
+
+   * Allows IPSec to work through NAT
+
+---
+
+4. IKE PHASES
+
+---
+
+## PHASE 1 (IKE SA)
+
+Purpose:
+
+* Establish secure communication channel between devices
+
+What happens:
+
+* Algorithm negotiation (AES, SHA, DH group)
+* Diffie-Hellman key exchange
+* Authentication (PSK or Certificate)
+
+Output:
+
+* Secure tunnel (IKE SA)
+
+Modes:
+
+1. Main Mode (6 messages)
+
+   * Secure
+   * Identity encrypted
+
+2. Aggressive Mode (3 messages)
+
+   * Faster
+   * Identity NOT encrypted
+
+---
+
+## PHASE 2 (IPSEC SA / QUICK MODE)
+
+Purpose:
+
+* Define how actual data will be protected
+
+What happens:
+
+* Exchange:
+
+  * Encryption algorithm
+  * Hash algorithm
+  * Lifetime
+* Create IPSec Security Association
+
+Key Feature:
+
+* Happens inside Phase 1 tunnel (already encrypted)
+
+Messages:
+
+* 3 messages (Quick Mode)
+
+Output:
+
+* Data encryption tunnel ready
+
+---
+
+5. ESP (ENCAPSULATING SECURITY PAYLOAD)
+
+---
+
+Protocol Number:
+
+* 50
+
+Provides:
+
+* Encryption (AES)
+* Integrity (SHA)
+* Authentication
+
+---
+
+## ESP PACKET STRUCTURE
+
+[IP Header]
+[ESP Header]
+
+* SPI (Security Parameter Index)
+* Sequence Number
+  [Encrypted Payload]
+* Data
+* Padding
+* Next Header
+  [Authentication Data (ICV)]
+
+---
+
+## WHAT IS ENCRYPTED
+
+Encrypted:
+
+* Payload
+* Padding
+* Next Header
+
+Not Encrypted:
+
+* ESP Header (SPI, Sequence)
+
+---
+
+## ESP MODES
+
+1. Transport Mode:
+   [IP Header][ESP][Data]
+
+   * Only payload encrypted
+   * Used in host-to-host
+
+2. Tunnel Mode:
+   [New IP][ESP][Original Packet]
+
+   * Entire packet encrypted
+   * Used in site-to-site VPN
+
+---
+
+6. AH (AUTHENTICATION HEADER)
+
+---
+
+Protocol Number:
+
+* 51
+
+Provides:
+
+* Integrity
+* Authentication
+
+Does NOT provide:
+
+* Encryption
+
+---
+
+## AH PACKET STRUCTURE
+
+[IP Header]
+[AH Header]
+
+* SPI
+* Sequence Number
+* Authentication Data
+  [Data]
+
+---
+
+## LIMITATION OF AH
+
+* Includes IP header in hash
+* NAT modifies IP → hash breaks
+* Packet dropped
+
+Conclusion:
+
+* AH does NOT work with NAT
+* Rarely used
+
+---
+
+7. NAT-T (NAT Traversal)
+==========================
+
+NAT-T works by detecting NAT during IKE Phase 1 using NAT-D payloads. Once NAT is detected, IPSec switches from native ESP (IP protocol 50) to UDP encapsulation using port 4500. The ESP packet is wrapped inside a UDP header, allowing NAT devices to modify only the outer IP/UDP headers while leaving the encrypted ESP payload untouched, thus preserving integrity and enabling secure communication over NAT.
+---
+
+Problem:
+
+* ESP uses Protocol 50 (no ports)
+* NAT requires ports
+* NAT modifies IP → breaks integrity
+
+---
+
+## HOW NAT-T WORKS
+
+STEP 1: NAT Detection
+
+* During Phase 1
+* Using NAT-D payload
+* Compare hashes:
+  Hash(IP + Port)
+
+If mismatch:
+→ NAT detected
+
+---
+
+## STEP 2: SWITCH TO NAT-T
+
+Instead of:
+ESP (Protocol 50)
+
+Use:
+UDP Port 4500
+
+---
+
+## STEP 3: ENCAPSULATION
+
+Original:
+[IP][ESP][Data]
+
+With NAT-T:
+[IP][UDP 4500][ESP][Data]
+
+---
+
+## WHY THIS WORKS
+
+* NAT modifies only:
+
+  * IP
+  * UDP header
+
+* Does NOT touch:
+
+  * ESP payload
+
+→ Integrity preserved
+
+---
+
+8. FULL VPN WORKING FLOW
+
+---
+
+STEP 1:
+User sends traffic (e.g., access HQ server)
+
+STEP 2:
+Firewall detects "interesting traffic"
+
+STEP 3:
+IKE Phase 1 starts
+
+* Exchange algorithms
+* Diffie-Hellman
+* Authentication
+
+STEP 4:
+IKE Phase 1 completed
+→ Secure channel established
+
+STEP 5:
+IKE Phase 2 (Quick Mode)
+
+* Create IPSec SA
+
+STEP 6:
+ESP encapsulates data
+
+* Encrypt + hash
+
+STEP 7:
+If NAT present:
+
+* NAT-T encapsulates ESP into UDP 4500
+
+STEP 8:
+Packet travels over internet
+
+STEP 9:
+Receiver:
+
+* Identifies SA (SPI)
+* Verifies integrity
+* Decrypts data
+
+STEP 10:
+Original packet delivered
+
+---
+
+9. IMPORTANT PORTS & PROTOCOLS
+
+---
+
+IKE:
+
+* UDP 500
+
+NAT-T:
+
+* UDP 4500
+
+ESP:
+
+* Protocol 50
+
+AH:
+
+* Protocol 51
+
+---
+
+10. KEY SECURITY FEATURES
+
+---
+
+Confidentiality:
+
+* AES encryption
+
+Integrity:
+
+* SHA hashing
+
+Authentication:
+
+* PSK / Certificates
+
+Anti-Replay:
+
+* Sequence numbers
+
+PFS (Perfect Forward Secrecy):
+
+* New key per session
+
+---
+
+11. IKEv1 vs IKEv2 (SHORT)
+
+---
+
+IKEv1:
+
+* 2 phases
+* Main & Aggressive mode
+* More complex
+
+IKEv2:
+
+* Fewer messages
+* More secure
+* Supports mobility (MOBIKE)
+* Faster
+
+---
+
+12. FINAL SUMMARY
+
+---
+
+VPN works by:
+
+1. Establishing trust (IKE Phase 1)
+2. Defining encryption rules (Phase 2)
+3. Securing data using ESP
+4. Using NAT-T if NAT exists
+
+Core Idea:
+
+* Create a secure tunnel over an insecure network
+
+---
+
+## END OF NOTES
+
+
+
+
+
