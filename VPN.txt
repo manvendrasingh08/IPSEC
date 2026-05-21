@@ -1,0 +1,380 @@
+# ===========================================
+
+# VPN (VIRTUAL PRIVATE NETWORK) - TERMINAL NOTES
+
+# ===========================================
+
+## $ what_is_vpn
+
+VPN = Virtual Private Network
+
+* Creates a secure, encrypted tunnel over the Internet
+* Protects data from attackers
+* Allows remote access to private networks
+
+## $ basic_idea
+
+Without VPN:
+
+```
+User -------- Internet -------- Server
+      (data exposed / insecure)
+```
+
+With VPN:
+
+```
+User ==== ENCRYPTED TUNNEL ==== Server
+      (data secure)
+```
+
+## $ high_level_architecture
+
+```
+[Branch LAN]         INTERNET         [HQ LAN]
+     |                                   |
+ [Firewall] ===== ENCRYPTED TUNNEL ===== [Firewall]
+     |                                   |
+  Users                                Servers
+```
+
+## $ why_vpn_is_used
+
+* Secure communication
+* Connect remote offices
+* Work from home access
+* Protect sensitive data
+* Use public Internet instead of costly leased lines
+
+# ===========================================
+
+# TYPES OF VPN
+
+# ===========================================
+
+## $ vpn_types
+
+1. Site-to-Site VPN
+2. Remote Access VPN
+
+# -------------------------------------------
+
+# 1. SITE-TO-SITE VPN
+
+# -------------------------------------------
+
+## $ site_to_site_vpn
+
+* Connects entire networks (office ↔ office)
+* No client software needed
+* Managed by firewalls/routers
+
+## $ site_to_site_diagram
+
+```
+[Branch LAN] -- [FW] ==== INTERNET ==== [FW] -- [HQ LAN]
+```
+
+## $ types_of_site_to_site
+
+1. Intranet VPN
+2. Extranet VPN
+
+## $ intranet_vpn
+
+* Same organization connection
+
+Example:
+
+```
+Company HQ ==== VPN ==== Company Branch
+```
+
+## $ extranet_vpn
+
+* Different organizations connection
+
+Example:
+
+```
+Company ==== VPN ==== Partner / Vendor
+```
+
+# -------------------------------------------
+
+# 2. REMOTE ACCESS VPN
+
+# -------------------------------------------
+
+## $ remote_access_vpn
+
+* Connects individual users to company network
+
+## $ remote_access_diagram
+
+```
+    [Remote User]
+          |
+          |
+      Internet
+          |
+     [VPN Gateway]
+          |
+    [Company Network]
+```
+
+## $ types_of_remote_access
+
+1. Client-Based VPN
+2. Clientless VPN
+
+## $ client_based_vpn
+
+* Requires software (VPN client)
+
+Flow:
+
+```
+User → VPN Client → Tunnel → Company Network
+```
+
+## $ clientless_vpn
+
+* No software required
+* Uses browser (SSL VPN)
+
+Flow:
+
+```
+User → Browser → HTTPS → VPN Portal
+```
+
+# ===========================================
+
+# VPN PROTOCOLS
+
+# ===========================================
+
+## $ vpn_protocols
+
+1. IPSec VPN
+2. SSL/TLS VPN
+3. PPTP (old, insecure)
+4. L2TP (used with IPSec)
+
+## $ ipsec_vpn
+
+* Works at Network Layer
+* Used for Site-to-Site VPN
+
+Uses:
+- IKE (key exchange)
+- ESP (encryption)
+- AH (integrity)
+
+## $ ssl_vpn
+
+* Works at Application Layer
+* Uses HTTPS
+* Used in Remote Access VPN
+
+# ===========================================
+
+# CORE COMPONENTS OF VPN
+
+# ===========================================
+
+## $ vpn_components
+
+1. Tunneling
+2. Encryption
+3. Authentication
+4. Integrity
+5. Key Management
+
+## $ tunneling
+
+Encapsulation:
+
+```
+Original Packet → Wrapped → VPN Packet
+```
+
+## $ encryption
+
+* Converts data into unreadable form
+
+Example:
+AES-128 / AES-256
+
+## $ authentication
+
+* Verifies identity
+
+Methods:
+- Pre-shared key (PSK)
+- Certificates
+- Username/Password
+
+## $ integrity
+
+* Ensures data not modified
+
+Method:
+SHA hashing
+
+## $ key_management
+
+* Handled by IKE
+* Exchanges keys securely
+
+# ===========================================
+
+# HOW VPN WORKS (FLOW)
+
+# ===========================================
+
+## $ vpn_working_flow
+
+Step 1:
+User sends request
+
+Step 2:
+Firewall checks VPN policy
+
+Step 3:
+If match → start tunnel setup
+
+Step 4:
+Authentication happens
+
+Step 5:
+Key exchange (IKE)
+- Diffie-Hellman
+- Shared secret key
+
+Step 6:
+Tunnel established
+
+Step 7:
+Data encrypted (ESP)
+
+```
+    Before:
+        [IP][DATA]
+
+    After:
+        [NEW IP][ENCRYPTED DATA]
+```
+
+Step 8:
+Data travels over Internet
+
+Step 9:
+Receiver decrypts
+
+Step 10:
+Original data delivered
+
+# ===========================================
+
+# VPN MODES
+
+# ===========================================
+
+## $ vpn_modes
+
+1. Tunnel Mode
+2. Transport Mode
+
+## $ tunnel_mode
+
+* Entire packet encrypted
+
+  [NEW IP]
+  [ENCRYPTED ORIGINAL PACKET]
+
+Used in:
+Site-to-Site VPN
+
+## $ transport_mode
+
+* Only payload encrypted
+
+  [IP HEADER]
+  [ENCRYPTED DATA]
+
+Used in:
+Host-to-host
+
+# ===========================================
+
+# SECURITY FEATURES
+
+# ===========================================
+
+## $ vpn_security
+
+Confidentiality:
+Encryption (AES)
+
+Integrity:
+Hashing (SHA)
+
+Authentication:
+PSK / Certificates
+
+Anti-Replay:
+Sequence numbers
+
+# ===========================================
+
+# SIMPLE ANALOGY
+
+# ===========================================
+
+## $ analogy
+
+Without VPN:
+Sending postcard → anyone can read
+
+With VPN:
+Sending locked box → only receiver can open
+
+# ===========================================
+
+# ADVANTAGES & LIMITATIONS
+
+# ===========================================
+
+## $ advantages
+
+* Secure communication
+* Cost-effective
+* Remote access
+* Data privacy
+
+## $ limitations
+
+* Slight delay (encryption overhead)
+* Complex setup
+* Depends on internet quality
+
+# ===========================================
+
+# FINAL SUMMARY
+
+# ===========================================
+
+## $ summary
+
+VPN works by:
+
+1. Authenticating users/devices
+2. Exchanging keys (IKE)
+3. Encrypting data (ESP)
+4. Sending through secure tunnel
+5. Decrypting at destination
+
+# ===== END OF VPN TERMINAL NOTES =====
+
