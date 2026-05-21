@@ -1,0 +1,488 @@
+================================================================================
+                XFRM + NETLINK SOCKETS + IPsec (LINUX)
+================================================================================
+
+------------------------------------------------------------------------------
+1. WHAT IS XFRM?
+------------------------------------------------------------------------------
+
+XFRM = Linux kernel transformation framework used for:
+- IPsec
+- packet encryption/decryption
+- authentication
+- Security Associations (SA)
+- Security Policies
+
+It lives INSIDE the Linux kernel networking stack.
+
+Main work:
+- Apply ESP/AH transforms
+- Encrypt outbound packets
+- Decrypt inbound packets
+- Match policies
+
+------------------------------------------------------------------------------
+2. WHAT ARE NETLINK SOCKETS?
+------------------------------------------------------------------------------
+
+Netlink sockets provide communication between:
+
+    USER SPACE  <--------->  KERNEL SPACE
+
+Used for:
+- routing
+- interfaces
+- firewall
+- networking configuration
+- XFRM/IPsec configuration
+
+------------------------------------------------------------------------------
+3. RELATION BETWEEN XFRM AND NETLINK
+------------------------------------------------------------------------------
+
+User-space tools configure XFRM using Netlink sockets.
+
+Examples:
+- ip xfrm
+- strongSwan
+- libreswan
+
+Flow:
+
+    User Tool
+        |
+        |  Netlink Socket
+        v
+    NETLINK_XFRM
+        |
+        v
+    Linux Kernel XFRM subsystem
+        |
+        v
+    SPD + SAD updated
+
+------------------------------------------------------------------------------
+4. BASIC NETLINK MESSAGE STRUCTURE
+------------------------------------------------------------------------------
+
+struct nlmsghdr {
+
+    __u32 nlmsg_len;     // total message length
+    __u16 nlmsg_type;    // message type
+    __u16 nlmsg_flags;   // flags
+    __u32 nlmsg_seq;     // sequence number
+    __u32 nlmsg_pid;     // sender PID
+};
+
+------------------------------------------------------------------------------
+5. NETLINK MESSAGE LAYOUT
+------------------------------------------------------------------------------
+
++----------------------+
+| struct nlmsghdr      |
++----------------------+
+| XFRM payload         |
++----------------------+
+| Attributes (TLV)     |
++----------------------+
+
+------------------------------------------------------------------------------
+6. IMPORTANT XFRM STRUCTURES
+------------------------------------------------------------------------------
+
+1. Security Association info:
+
+    struct xfrm_usersa_info
+
+Contains:
+- SPI
+- source/destination IP
+- mode
+- protocol
+- algorithm info
+
+--------------------------------------------------
+
+2. Policy info:
+
+    struct xfrm_userpolicy_info
+
+Contains:
+- src subnet
+- dst subnet
+- direction
+- priority
+- action
+
+------------------------------------------------------------------------------
+7. IMPORTANT XFRM MESSAGE TYPES
+------------------------------------------------------------------------------
+
+XFRM_MSG_NEWSA        -> Add SA
+XFRM_MSG_DELSA        -> Delete SA
+XFRM_MSG_NEWPOLICY    -> Add policy
+XFRM_MSG_DELPOLICY    -> Delete policy
+
+------------------------------------------------------------------------------
+8. NETLINK ATTRIBUTES (TLV FORMAT)
+------------------------------------------------------------------------------
+
+struct nlattr {
+
+    __u16 nla_len;
+    __u16 nla_type;
+};
+
+TLV means:
+- Type
+- Length
+- Value
+
+Used for:
+- encryption keys
+- auth keys
+- lifetimes
+- algorithms
+
+------------------------------------------------------------------------------
+9. SOCKET CREATION
+------------------------------------------------------------------------------
+
+socket(AF_NETLINK, SOCK_RAW, NETLINK_XFRM);
+
+Meaning:
+- AF_NETLINK     -> Netlink family
+- NETLINK_XFRM   -> XFRM subsystem communication
+
+------------------------------------------------------------------------------
+10. COMPLETE INTERNAL FLOW
+------------------------------------------------------------------------------
+
+Application
+    |
+    v
+ip xfrm / strongSwan
+    |
+    v
+Netlink socket
+    |
+    v
+NETLINK_XFRM
+    |
+    v
+Kernel XFRM subsystem
+    |
+    +--------------------+
+    |                    |
+    v                    v
+SPD                  SAD
+    |
+    v
+ESP/AH processing
+    |
+    v
+Packet encryption/decryption
+
+------------------------------------------------------------------------------
+11. SPD vs SAD
+------------------------------------------------------------------------------
+
+SPD = Security Policy Database
+--------------------------------
+Defines:
+- WHICH traffic needs protection
+- WHAT action to take
+
+Example:
+Traffic from:
+10.0.0.1 -> 10.0.0.2
+
+Use:
+ESP transport mode
+
+--------------------------------------------------
+
+SAD = Security Association Database
+-----------------------------------
+
+Contains actual crypto details:
+- SPI
+- encryption keys
+- auth keys
+- algorithms
+- tunnel/transport mode
+
+------------------------------------------------------------------------------
+12. PACKET FLOW THROUGH XFRM
+------------------------------------------------------------------------------
+
+Outbound:
+
+Application
+    |
+    v
+TCP/UDP
+    |
+    v
+IP Layer
+    |
+    v
+SPD lookup
+    |
+    v
+Find matching SA in SAD
+    |
+    v
+ESP encryption
+    |
+    v
+NIC driver
+    |
+    v
+Network
+
+------------------------------------------------------------------------------
+13. EXAMPLE NETLINK MESSAGE FOR SA ADDITION
+------------------------------------------------------------------------------
+
++-------------------------------+
+| nlmsghdr                      |
+| type = XFRM_MSG_NEWSA         |
++-------------------------------+
+| xfrm_usersa_info              |
+| SPI                           |
+| Src IP                        |
+| Dst IP                        |
+| Mode                          |
++-------------------------------+
+| Attributes                    |
+| AES key                       |
+| SHA key                       |
++-------------------------------+
+
+------------------------------------------------------------------------------
+14. HANDS-ON LAB USING NETWORK NAMESPACES
+------------------------------------------------------------------------------
+
+STEP 1 -> Create namespaces
+
+sudo ip netns add ns1
+sudo ip netns add ns2
+
+--------------------------------------------------
+
+STEP 2 -> Create virtual ethernet pair
+
+sudo ip link add veth1 type veth peer name veth2
+
+--------------------------------------------------
+
+STEP 3 -> Move interfaces into namespaces
+
+sudo ip link set veth1 netns ns1
+sudo ip link set veth2 netns ns2
+
+--------------------------------------------------
+
+STEP 4 -> Configure IP addresses
+
+sudo ip netns exec ns1 ip addr add 10.0.0.1/24 dev veth1
+
+sudo ip netns exec ns2 ip addr add 10.0.0.2/24 dev veth2
+
+--------------------------------------------------
+
+STEP 5 -> Bring interfaces up
+
+sudo ip netns exec ns1 ip link set veth1 up
+sudo ip netns exec ns1 ip link set lo up
+
+sudo ip netns exec ns2 ip link set veth2 up
+sudo ip netns exec ns2 ip link set lo up
+
+--------------------------------------------------
+
+STEP 6 -> Test connectivity
+
+sudo ip netns exec ns1 ping 10.0.0.2
+
+------------------------------------------------------------------------------
+15. ADD XFRM SECURITY ASSOCIATIONS
+------------------------------------------------------------------------------
+
+Namespace 1:
+
+sudo ip netns exec ns1 ip xfrm state add \
+src 10.0.0.1 dst 10.0.0.2 \
+proto esp spi 0x100 \
+mode transport \
+auth sha256 0x11111111111111111111111111111111 \
+enc aes 0x22222222222222222222222222222222
+
+--------------------------------------------------
+
+Namespace 2:
+
+sudo ip netns exec ns2 ip xfrm state add \
+src 10.0.0.2 dst 10.0.0.1 \
+proto esp spi 0x101 \
+mode transport \
+auth sha256 0x11111111111111111111111111111111 \
+enc aes 0x22222222222222222222222222222222
+
+------------------------------------------------------------------------------
+16. ADD XFRM POLICIES
+------------------------------------------------------------------------------
+
+Namespace 1:
+
+sudo ip netns exec ns1 ip xfrm policy add \
+src 10.0.0.1/32 dst 10.0.0.2/32 \
+dir out tmpl src 10.0.0.1 dst 10.0.0.2 \
+proto esp mode transport
+
+--------------------------------------------------
+
+Namespace 2:
+
+sudo ip netns exec ns2 ip xfrm policy add \
+src 10.0.0.2/32 dst 10.0.0.1/32 \
+dir out tmpl src 10.0.0.2 dst 10.0.0.1 \
+proto esp mode transport
+
+------------------------------------------------------------------------------
+17. OBSERVE ENCRYPTED TRAFFIC
+------------------------------------------------------------------------------
+
+Run tcpdump:
+
+sudo ip netns exec ns1 tcpdump -i veth1
+
+Now ping again.
+
+You should see:
+
+ESP(spi=0x100,...)
+
+instead of plain ICMP.
+
+------------------------------------------------------------------------------
+18. OBSERVE NETLINK COMMUNICATION
+------------------------------------------------------------------------------
+
+Use strace:
+
+strace -e sendmsg ip xfrm state
+
+This shows:
+- Netlink socket creation
+- sendmsg()
+- messages sent to kernel
+
+------------------------------------------------------------------------------
+19. MONITOR LIVE XFRM EVENTS
+------------------------------------------------------------------------------
+
+ip xfrm monitor
+
+Now add/delete SAs or policies in another terminal.
+
+Kernel events will appear live.
+
+------------------------------------------------------------------------------
+20. INTERNAL KERNEL FLOW
+------------------------------------------------------------------------------
+
+User Space:
+
+ip xfrm
+    |
+    v
+libnetlink
+    |
+    v
+socket(AF_NETLINK, SOCK_RAW, NETLINK_XFRM)
+    |
+    v
+sendmsg()
+
+--------------------------------------------------
+
+Kernel Space:
+
+netlink_rcv_skb()
+      |
+      v
+xfrm_user_rcv_msg()
+      |
+      v
+xfrm_add_sa()
+      |
+      v
+Insert into SAD
+
+------------------------------------------------------------------------------
+21. WHY NETLINK INSTEAD OF ioctl()
+------------------------------------------------------------------------------
+
+Old networking:
+- ioctl()
+
+Modern networking:
+- Netlink
+
+Advantages:
+- extensible
+- async
+- structured attributes
+- better scalability
+- better networking integration
+
+------------------------------------------------------------------------------
+22. COMPLETE ARCHITECTURE
+------------------------------------------------------------------------------
+
++------------------------------------------------+
+| User Space                                     |
+|------------------------------------------------|
+| ip xfrm                                        |
+| strongSwan                                     |
+| libreswan                                      |
++------------------------------------------------+
+                    |
+                    | Netlink
+                    v
++------------------------------------------------+
+| NETLINK_XFRM                                   |
++------------------------------------------------+
+                    |
+                    v
++------------------------------------------------+
+| Linux Kernel XFRM subsystem                    |
+|------------------------------------------------|
+| SPD                                            |
+| SAD                                            |
+| ESP/AH processing                              |
++------------------------------------------------+
+                    |
+                    v
++------------------------------------------------+
+| Linux IP stack                                 |
++------------------------------------------------+
+                    |
+                    v
++------------------------------------------------+
+| NIC Driver                                     |
++------------------------------------------------+
+
+------------------------------------------------------------------------------
+23. VERY IMPORTANT INTERVIEW LINE
+------------------------------------------------------------------------------
+
+"XFRM is the Linux kernel framework that performs IPsec processing,
+while Netlink sockets (NETLINK_XFRM) provide the communication channel
+between user-space tools and the kernel XFRM subsystem."
+
+================================================================================
+END
+================================================================================

@@ -1,0 +1,694 @@
+################################################################################
+# XFRM / IPsec / SAD / SPD / Netlink Notes
+# Linux Kernel Networking Notes
+################################################################################
+
+
+===============================================================================
+1. WHAT IS XFRM ?
+===============================================================================
+
+XFRM = Transformation Framework
+
+Linux kernel subsystem responsible for:
+- IPsec processing
+- Packet encryption/decryption
+- ESP/AH handling
+- Security Associations
+- Tunnel processing
+- Replay protection
+
+Core idea:
+
+Normal Packet
+    ↓
+XFRM applies transformation
+    ↓
+Secure IPsec Packet
+
+
+===============================================================================
+2. WHY XFRM EXISTS
+===============================================================================
+
+Linux needed a subsystem to:
+- encrypt packets
+- authenticate packets
+- create VPN tunnels
+- manage IPsec states/policies
+
+XFRM does all of this.
+
+
+===============================================================================
+3. WHAT "TRANSFORM" MEANS
+===============================================================================
+
+Transform = changing packet form.
+
+Examples:
+- Add ESP header
+- Encrypt payload
+- Authenticate packet
+- Encapsulate packet
+- Tunnel packet
+
+Example:
+
+Original:
+[IP][TCP][DATA]
+
+After XFRM:
+[IP][ESP][Encrypted DATA]
+
+
+===============================================================================
+4. XFRM IN NETWORK STACK
+===============================================================================
+
+Outgoing Path:
+
+Application
+    ↓
+Socket Layer
+    ↓
+TCP/UDP
+    ↓
+Routing
+    ↓
+XFRM Policy Lookup
+    ↓
+Encryption/ESP
+    ↓
+NIC Driver
+    ↓
+Network
+
+
+Incoming Path:
+
+NIC
+ ↓
+IP Layer
+ ↓
+XFRM Input
+ ↓
+Decrypt/Verify
+ ↓
+TCP/UDP
+ ↓
+Application
+
+
+===============================================================================
+5. MAIN XFRM COMPONENTS
+===============================================================================
+
+A) Policy
+B) State
+C) Templates
+
+
+===============================================================================
+6. POLICY VS STATE
+===============================================================================
+
+POLICY:
+--------
+Defines:
+"WHICH traffic should be protected?"
+
+Example:
+src=10.0.0.1
+dst=10.0.0.2
+
+STATE:
+-------
+Defines:
+"HOW traffic should be protected?"
+
+Contains:
+- encryption algorithm
+- authentication algorithm
+- SPI
+- keys
+- mode
+
+Simple understanding:
+
+SPD = WHAT to protect
+SAD = HOW to protect
+
+
+===============================================================================
+7. SPD AND SAD
+===============================================================================
+
+SPD = Security Policy Database
+SAD = Security Association Database
+
+
+SPD:
+----
+Contains policies.
+
+Example:
+"If packet matches this rule, apply IPsec"
+
+
+SAD:
+----
+Contains Security Associations (SAs).
+
+Contains:
+- SPI
+- AES/SHA algorithms
+- keys
+- replay counters
+- transport/tunnel mode
+
+
+===============================================================================
+8. SAD FULL FORM
+===============================================================================
+
+SAD = Security Association Database
+
+
+===============================================================================
+9. SECURITY ASSOCIATION (SA)
+===============================================================================
+
+SA = one secure connection definition.
+
+Contains:
+- encryption details
+- authentication details
+- SPI
+- sequence numbers
+- replay protection
+- mode
+
+Important:
+One SA = one direction only.
+
+Bidirectional VPN requires:
+- inbound SA
+- outbound SA
+
+
+===============================================================================
+10. XFRM MODES
+===============================================================================
+
+A) TRANSPORT MODE
+-----------------
+
+Only payload encrypted.
+
+Original:
+[IP][TCP][DATA]
+
+Becomes:
+[IP][ESP][TCP][DATA]
+
+Used:
+Host ↔ Host
+
+
+B) TUNNEL MODE
+---------------
+
+Entire packet encapsulated.
+
+Original:
+[IP][TCP][DATA]
+
+Becomes:
+[NEW IP][ESP][OLD IP][TCP][DATA]
+
+Used:
+VPN tunnels
+
+
+===============================================================================
+11. ESP AND AH
+===============================================================================
+
+ESP = Encapsulating Security Payload
+------------------------------------
+
+Provides:
+- encryption
+- integrity
+- authentication
+
+Structure:
+[IP][ESP][Encrypted Payload][Auth]
+
+
+AH = Authentication Header
+---------------------------
+
+Provides:
+- integrity
+- authentication
+
+NO encryption.
+
+Rare today.
+
+
+===============================================================================
+12. XFRM + IPSEC RELATION
+===============================================================================
+
+IPsec uses:
+- ESP
+- AH
+- Security Associations
+
+XFRM is Linux kernel framework implementing them.
+
+
+===============================================================================
+13. USERSPACE ↔ KERNEL COMMUNICATION
+===============================================================================
+
+Userspace tools:
+- strongSwan
+- libreswan
+- iproute2
+
+communicate with kernel using:
+
+NETLINK_XFRM
+
+
+Architecture:
+
+strongSwan/ip command
+        ↓
+NETLINK_XFRM socket
+        ↓
+Kernel XFRM subsystem
+        ↓
+SPD/SAD updated
+
+
+===============================================================================
+14. WHY "OPERATION NOT PERMITTED" HAPPENS
+===============================================================================
+
+Command:
+
+ip xfrm state
+
+Without sudo:
+----------------
+
+Kernel checks:
+Does process have CAP_NET_ADMIN ?
+
+NO
+ ↓
+RTNETLINK answers: Operation not permitted
+
+
+With sudo:
+-----------
+
+sudo ip xfrm state
+
+Root has:
+CAP_NET_ADMIN
+
+So access allowed.
+
+
+===============================================================================
+15. IMPORTANT LINUX CAPABILITY
+===============================================================================
+
+CAP_NET_ADMIN
+
+Required for:
+- routing changes
+- firewall changes
+- xfrm/ipsec operations
+- interface configuration
+
+
+===============================================================================
+16. XFRM COMMANDS
+===============================================================================
+
+View policies:
+---------------
+
+sudo ip xfrm policy
+
+
+View states:
+------------
+
+sudo ip xfrm state
+
+
+Monitor live events:
+--------------------
+
+sudo ip xfrm monitor
+
+
+Flush all policies:
+-------------------
+
+sudo ip xfrm policy flush
+
+
+Flush all states:
+-----------------
+
+sudo ip xfrm state flush
+
+
+===============================================================================
+17. ADDING XFRM STATE
+===============================================================================
+
+sudo ip xfrm state add \
+src 192.168.1.1 dst 192.168.1.2 \
+proto esp spi 0x100 \
+mode transport \
+auth sha256 0x11111111111111111111111111111111 \
+enc aes 0x11111111111111111111111111111111
+
+
+Meaning:
+--------
+- create ESP Security Association
+- use AES encryption
+- use SHA256 authentication
+- transport mode
+- SPI = 0x100
+
+
+===============================================================================
+18. ADDING POLICY
+===============================================================================
+
+sudo ip xfrm policy add \
+src 192.168.1.1/32 \
+dst 192.168.1.2/32 \
+dir out \
+tmpl src 192.168.1.1 \
+dst 192.168.1.2 \
+proto esp mode transport
+
+
+Meaning:
+--------
+Protect traffic:
+192.168.1.1 → 192.168.1.2
+
+using:
+ESP transport mode
+
+
+===============================================================================
+19. DELETING POLICY
+===============================================================================
+
+Delete specific policy:
+-----------------------
+
+sudo ip xfrm policy delete \
+src 192.168.1.1/32 \
+dst 192.168.1.2/32 \
+dir out
+
+
+Delete all policies:
+--------------------
+
+sudo ip xfrm policy flush
+
+
+===============================================================================
+20. DELETING STATE
+===============================================================================
+
+Delete specific state:
+----------------------
+
+sudo ip xfrm state delete \
+src 192.168.1.1 \
+dst 192.168.1.2 \
+proto esp spi 0x100
+
+
+Delete all states:
+------------------
+
+sudo ip xfrm state flush
+
+
+===============================================================================
+21. RECOMMENDED CLEANUP
+===============================================================================
+
+sudo ip xfrm policy flush
+sudo ip xfrm state flush
+
+
+===============================================================================
+22. REPLAY PROTECTION
+===============================================================================
+
+Attack:
+--------
+Attacker captures encrypted packet
+and replays it.
+
+Protection:
+-----------
+XFRM maintains:
+- sequence numbers
+- replay bitmap window
+
+Old packets dropped.
+
+
+===============================================================================
+23. INTERNAL KERNEL STRUCTURES
+===============================================================================
+
+struct xfrm_state
+-----------------
+Represents SA.
+
+Contains:
+- SPI
+- algorithms
+- keys
+- replay info
+
+
+struct xfrm_policy
+------------------
+Represents policy.
+
+Contains:
+- selectors
+- priorities
+- templates
+
+
+struct xfrm_selector
+--------------------
+Packet matching rules.
+
+
+===============================================================================
+24. IMPORTANT KERNEL FUNCTIONS
+===============================================================================
+
+xfrm_lookup()
+xfrm_policy_lookup()
+xfrm_input()
+xfrm_output()
+
+
+===============================================================================
+25. KERNEL SOURCE LOCATION
+===============================================================================
+
+net/xfrm/
+
+
+Important files:
+----------------
+xfrm_policy.c
+xfrm_state.c
+xfrm_input.c
+xfrm_output.c
+xfrm_user.c
+
+
+===============================================================================
+26. XFRM DATABASE FLOW
+===============================================================================
+
+Outgoing packet:
+----------------
+
+Packet
+  ↓
+Policy lookup (SPD)
+  ↓
+Find matching SA (SAD)
+  ↓
+Encrypt/authenticate
+  ↓
+Send
+
+
+Incoming packet:
+----------------
+
+Encrypted packet
+      ↓
+SPI lookup in SAD
+      ↓
+Decrypt/verify
+      ↓
+Remove ESP
+      ↓
+Deliver packet
+
+
+===============================================================================
+27. STRONGSWAN + XFRM
+===============================================================================
+
+Important:
+-----------
+strongSwan DOES NOT encrypt packets itself.
+
+What happens:
+
+strongSwan
+    ↓
+IKE negotiation
+    ↓
+Installs states/policies via NETLINK_XFRM
+    ↓
+Kernel XFRM encrypts packets
+
+
+===============================================================================
+28. VIEW LOADED XFRM MODULES
+===============================================================================
+
+lsmod | grep xfrm
+
+
+Possible modules:
+-----------------
+
+xfrm_user
+xfrm_algo
+esp4
+esp6
+ah4
+ah6
+
+
+===============================================================================
+29. VIEW ESP PACKETS
+===============================================================================
+
+sudo tcpdump -i eth0 esp
+
+
+===============================================================================
+30. MONITOR LIVE XFRM EVENTS
+===============================================================================
+
+sudo ip xfrm monitor
+
+
+Possible events:
+----------------
+
+XFRM_MSG_NEWSA
+XFRM_MSG_DELSA
+XFRM_MSG_NEWPOLICY
+XFRM_MSG_DELPOLICY
+
+
+===============================================================================
+31. VERY IMPORTANT MENTAL MODEL
+===============================================================================
+
+Netfilter:
+-----------
+Firewall / NAT system
+
+
+XFRM:
+------
+Packet security transformation engine
+
+
+OR
+
+
+Policy:
+--------
+"Should protect?"
+
+
+State:
+-------
+"How to protect?"
+
+
+===============================================================================
+32. EXTREMELY IMPORTANT CORE IDEA
+===============================================================================
+
+XFRM itself DOES NOT:
+---------------------
+- negotiate keys
+- authenticate users
+- establish VPN session
+
+That is done by:
+----------------
+- strongSwan
+- libreswan
+- IKE daemon
+
+
+XFRM DOES:
+-----------
+- store policies
+- store SAs
+- encrypt/decrypt packets
+- process ESP/AH
+- apply transforms
+
+
+===============================================================================
+33. ONE-LINE SUMMARY
+===============================================================================
+
+XFRM is Linux kernel's packet transformation engine
+used for IPsec encryption, authentication, and VPN processing.
+
+
+################################################################################
+# END
+################################################################################
