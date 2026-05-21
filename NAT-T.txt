@@ -1,0 +1,297 @@
+# ================================
+
+# NAT-T (NAT TRAVERSAL) - DETAILED
+
+# ================================
+
+## 1. INTRODUCTION
+-----------------------
+
+NAT-T (Network Address Translation Traversal) is used in IPSec VPN
+to allow encrypted traffic (ESP) to pass through NAT devices.
+
+It solves the problem where NAT modifies packet headers,
+which breaks IPSec integrity checks.
+
+## 2. WHY NAT-T IS REQUIRED
+------------------------------
+
+### Scenario
+---------------
+
+Branch Firewall (private IP) : 192.168.1.10
+NAT Router (public IP)       : 5.5.5.5
+HQ Firewall                  : 1.1.1.1
+
+### Problem 1: ESP has no ports
+
+ESP uses Protocol 50 (not TCP/UDP)
+
+Packet looks like:
+
+```
+[IP HEADER]
+[ESP HEADER]
+[ENCRYPTED DATA]
+```
+
+NAT works using:
+IP + PORT mapping
+
+Since ESP has no port → NAT cannot track connection properly
+
+### Problem 2: Integrity Failure
+--------------------------------------
+
+ESP applies hashing for integrity
+
+Example:
+
+```
+Before NAT:
+    Source IP = 192.168.1.10
+
+After NAT:
+    Source IP = 5.5.5.5
+```
+
+Hash was calculated using original IP
+
+Now:
+Hash mismatch → packet dropped
+
+### Conclusion
+
+ESP cannot work with NAT directly
+
+## 3. NAT DETECTION (HOW DEVICES KNOW NAT EXISTS)
+===================================================
+
+This happens during IKE Phase 1 (UDP Port 500)
+
+Devices use NAT-D (NAT Detection payload)
+
+### Step-by-step
+
+Step 1:
+Initiator calculates hash:
+
+```
+    HASH = Hash(Source IP + Destination IP + Port)
+
+Example:
+    Hash(192.168.1.10, 1.1.1.1, 500)
+
+Sends this hash to responder
+```
+
+Step 2:
+Responder receives packet
+
+```
+Sees source IP as:
+    5.5.5.5 (after NAT)
+
+Recalculates hash:
+
+    Hash(5.5.5.5, 1.1.1.1, 500)
+```
+
+Step 3:
+Compare hashes
+
+```
+    Expected Hash != Received Hash
+
+→ NAT detected
+```
+
+## 4. SWITCH TO NAT-T MODE
+===================================
+
+Once NAT is detected:
+
+Devices stop using:
+ESP (Protocol 50)
+
+Devices switch to:
+UDP encapsulation
+
+### Port usage
+
+Before NAT-T:
+IKE  → UDP 500
+ESP  → Protocol 50
+
+After NAT-T:
+IKE + Data → UDP 4500
+
+## 5. CORE WORKING (ENCAPSULATION)
+============================================
+
+### Without NAT-T
+-----------------------
+
+```
+[IP HEADER]
+[ESP HEADER]
+[ENCRYPTED DATA]
+```
+
+### With NAT-T
+--------------------
+
+```
+[OUTER IP HEADER]
+[UDP HEADER - PORT 4500]
+[ESP HEADER]
+[ENCRYPTED DATA]
+```
+
+Important:
+ESP is NOT removed
+It is wrapped inside UDP
+
+## 6. WHY THIS WORKS
+======================
+
+NAT modifies:
+- Outer IP header
+- UDP header
+
+NAT does NOT modify:
+- ESP payload (encrypted data)
+
+So:
+Integrity check remains valid
+VPN works correctly
+
+## 7. FULL FLOW (END-TO-END)
+==================================
+
+Step 1:
+User sends request from branch to HQ
+
+Step 2:
+Firewall detects interesting traffic
+→ VPN process starts
+
+Step 3:
+IKE Phase 1 begins
+- Algorithm exchange
+- Diffie-Hellman
+- NAT detection
+
+Step 4:
+NAT detected
+→ Switch to UDP 4500
+
+Step 5:
+IKE Phase 2 (Quick Mode)
+- Create IPSec SA
+- Define encryption & hashing
+
+Step 6:
+ESP encrypts data
+
+```
+    Original:
+        [IP][DATA]
+
+    After ESP:
+        [ESP][ENCRYPTED DATA]
+```
+
+Step 7:
+NAT-T encapsulates packet
+
+```
+    Final packet:
+
+        [OUTER IP HEADER]
+        [UDP HEADER - 4500]
+        [ESP HEADER]
+        [ENCRYPTED DATA]
+```
+
+Step 8:
+Packet reaches NAT router
+
+```
+    NAT modifies:
+        - Source IP
+        - UDP port (if needed)
+
+    ESP remains untouched
+```
+
+Step 9:
+Packet travels over internet
+
+Step 10:
+Receiver processes packet
+
+```
+    - Detect UDP 4500
+    - Remove UDP header
+    - Extract ESP packet
+    - Use SPI to find SA
+    - Verify integrity
+    - Decrypt data
+    - Forward original packet
+```
+
+## 8. NON-ESP MARKER (ADVANCED)
+========================================
+
+NAT-T packets include a marker:
+
+```
+0x00000000
+```
+
+Purpose:
+Distinguish between:
+- IKE packets
+- ESP-in-UDP packets
+
+## 9. KEY CHARACTERISTICS
+=================================
+
+* NAT-T does NOT change encryption logic
+* Only changes transport method
+* Uses UDP 4500 after NAT detection
+* Works transparently once established
+
+## 10. SIMPLE ANALOGY
+===========================
+
+ESP:
+Locked box (secure data)
+
+NAT:
+Changes labels on box
+
+Problem:
+Changing label breaks seal
+
+NAT-T:
+Put box inside courier package (UDP)
+
+Now:
+Courier modifies outer package
+Inner box remains secure
+
+## 11. FINAL SUMMARY
+=======================
+
+NAT-T works by:
+
+1. Detecting NAT using hash comparison
+2. Switching to UDP 4500
+3. Wrapping ESP inside UDP
+4. Allowing NAT to modify only outer headers
+5. Keeping encrypted data untouched
+
+# ===== END OF NOTES =====
+
