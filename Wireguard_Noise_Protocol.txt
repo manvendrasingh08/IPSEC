@@ -1,0 +1,748 @@
+################################################################################
+# WIREGUARD + NOISE PROTOCOL FRAMEWORK
+# COMPLETE TERMINAL STYLE NOTES
+################################################################################
+
+===============================================================================
+1. WHAT IS WIREGUARD?
+===============================================================================
+
+WireGuard:
+    - Modern VPN protocol
+    - Lightweight
+    - High-performance
+    - Kernel-based VPN
+    - Uses modern cryptography
+    - Operates mainly at Layer 3 (Network Layer)
+
+Main goals:
+    - Simplicity
+    - Speed
+    - Security
+    - Small codebase
+    - Easy auditing
+
+WireGuard creates:
+    Encrypted tunnels between peers.
+
+-------------------------------------------------------------------------------
+
+Traditional VPNs:
+    - OpenVPN
+    - IPsec
+
+Problems:
+    - Complex
+    - Huge codebase
+    - Difficult configuration
+    - Hard to audit
+
+WireGuard solves this using:
+    - Minimal design
+    - Fixed crypto suite
+    - Kernel integration
+
+===============================================================================
+2. BASIC IDEA OF WIREGUARD
+===============================================================================
+
+Without VPN:
+
+    Laptop ---------------- Internet ---------------- Server
+
+With WireGuard:
+
+    Laptop ===== Encrypted Tunnel ===== Server
+
+Routers on internet only see:
+    UDP packets
+
+They cannot see:
+    - Original payload
+    - Internal IPs
+    - Application data
+
+===============================================================================
+3. CORE COMPONENTS
+===============================================================================
+
+WireGuard uses:
+
+    wg0
+        Virtual network interface
+
+Each device is called:
+    Peer
+
+Each peer has:
+
+    Private Key
+    Public Key
+
+-------------------------------------------------------------------------------
+
+Private Key:
+    - Secret
+    - Never shared
+    - Used for authentication proof
+
+Public Key:
+    - Shared openly
+    - Used to verify identity
+
+===============================================================================
+4. AUTHENTICATION MODEL
+===============================================================================
+
+Traditional VPNs use:
+    - Username/password
+    - TLS certificates
+    - Certificate authorities
+
+WireGuard uses:
+
+    Identity = Public Key
+
+Authentication means:
+
+    "Prove you own the corresponding private key."
+
+-------------------------------------------------------------------------------
+
+VERY IMPORTANT:
+
+Private key is NEVER transmitted.
+
+Instead:
+    Client generates mathematical proof using private key.
+
+Server verifies proof using public key.
+
+-------------------------------------------------------------------------------
+
+Core concept:
+
+    Public Key:
+        Verifies proof
+
+    Private Key:
+        Generates proof
+
+-------------------------------------------------------------------------------
+
+Server logic:
+
+    If proof is valid:
+        Only owner of private key could generate it.
+
+Authenticated.
+
+===============================================================================
+5. HOW SERVER VERIFIES PRIVATE KEY WITHOUT SEEING IT
+===============================================================================
+
+Core idea:
+
+    Client performs impossible mathematical operation
+    that only holder of private key can perform.
+
+-------------------------------------------------------------------------------
+
+Simplified conceptual flow:
+
+STEP 1:
+    Server sends challenge
+
+STEP 2:
+    Client computes:
+
+        RESPONSE = MATH(PRIVATE_KEY, CHALLENGE)
+
+STEP 3:
+    Server verifies:
+
+        VERIFY(PUBLIC_KEY, RESPONSE)
+
+If valid:
+    Client possesses matching private key.
+
+-------------------------------------------------------------------------------
+
+Private key itself is NEVER sent.
+
+Only:
+    cryptographic proof
+
+===============================================================================
+6. DIFFIE-HELLMAN KEY EXCHANGE
+===============================================================================
+
+Used heavily in:
+    - Noise
+    - WireGuard
+
+Purpose:
+    Generate shared secret without transmitting secret.
+
+-------------------------------------------------------------------------------
+
+Core magic:
+
+Two peers independently compute:
+
+    SAME SECRET
+
+without sending secret directly.
+
+-------------------------------------------------------------------------------
+
+Simplified idea:
+
+Client:
+    Private value = a
+    Sends public value = g^a
+
+Server:
+    Private value = b
+    Sends public value = g^b
+
+Client computes:
+    (g^b)^a
+
+Server computes:
+    (g^a)^b
+
+Both derive same shared secret.
+
+===============================================================================
+7. WHAT IS NOISE PROTOCOL FRAMEWORK?
+===============================================================================
+
+Noise Protocol Framework:
+    Modern cryptographic framework for building secure handshakes.
+
+It is NOT:
+    - VPN
+    - Encryption algorithm
+    - Transport protocol
+
+Instead:
+    Framework for constructing secure authentication + key exchange protocols.
+
+-------------------------------------------------------------------------------
+
+Noise provides:
+    - Handshake patterns
+    - Key exchange structure
+    - Authentication rules
+    - Session key derivation
+    - Forward secrecy
+
+-------------------------------------------------------------------------------
+
+Main purpose:
+
+Allow developers to build secure encrypted protocols
+without inventing cryptography manually.
+
+===============================================================================
+8. WHAT DOES NOISE DO?
+===============================================================================
+
+Noise solves:
+
+    1. Authentication
+    2. Key exchange
+    3. Session key derivation
+    4. Forward secrecy
+    5. Replay protection
+    6. Secure encrypted transport setup
+
+-------------------------------------------------------------------------------
+
+Noise combines:
+
+    - Public key cryptography
+    - Diffie-Hellman
+    - Ephemeral keys
+    - Hashing
+    - Symmetric encryption
+
+into:
+    Structured handshake patterns
+
+===============================================================================
+9. NOISE HANDSHAKE PATTERNS
+===============================================================================
+
+Examples:
+
+    Noise_IK
+    Noise_XX
+    Noise_NN
+
+-------------------------------------------------------------------------------
+
+Meaning of symbols:
+
+    N = no static keys known
+    K = static key known
+    X = static key transmitted
+    I = initiator known
+
+-------------------------------------------------------------------------------
+
+WireGuard uses:
+
+    Noise_IK
+
+Meaning:
+
+    Initiator knows responder's static public key.
+
+Perfect for VPN systems.
+
+===============================================================================
+10. NOISE PROTOCOL NAME STRUCTURE
+===============================================================================
+
+Example:
+
+    Noise_IK_25519_ChaChaPoly_BLAKE2s
+
+-------------------------------------------------------------------------------
+
+Meaning:
+
+    IK
+        Handshake pattern
+
+    25519
+        Diffie-Hellman curve
+
+    ChaChaPoly
+        Encryption + authentication
+
+    BLAKE2s
+        Hash function
+
+-------------------------------------------------------------------------------
+
+WireGuard uses modified:
+
+    Noise_IKpsk2_25519_ChaChaPoly_BLAKE2s
+
+===============================================================================
+11. STATIC VS EPHEMERAL KEYS
+===============================================================================
+
+STATIC KEYS:
+    - Long-term identity
+    - Persistent
+
+EPHEMERAL KEYS:
+    - Temporary
+    - Generated per session
+
+-------------------------------------------------------------------------------
+
+Why ephemeral keys matter:
+
+    Forward Secrecy
+
+Meaning:
+
+    Even if long-term key leaks later,
+    old traffic remains secure.
+
+===============================================================================
+12. FORWARD SECRECY
+===============================================================================
+
+Definition:
+
+    Compromise of long-term keys
+    should NOT expose old sessions.
+
+Achieved using:
+    Ephemeral session keys
+
+-------------------------------------------------------------------------------
+
+Session keys:
+    - Temporary
+    - Derived during handshake
+    - Frequently rotated
+
+===============================================================================
+13. HANDSHAKE FLOW IN NOISE / WIREGUARD
+===============================================================================
+
+Simplified flow:
+
+Client:
+    - Sends ephemeral public key
+    - Proves identity cryptographically
+
+Server:
+    - Verifies identity
+    - Performs DH operations
+
+Both:
+    - Derive same session keys
+    - Start encrypted communication
+
+-------------------------------------------------------------------------------
+
+After handshake:
+
+    Symmetric encryption used for data transfer
+
+Much faster than asymmetric crypto.
+
+===============================================================================
+14. DIFFIE-HELLMAN TOKENS IN NOISE
+===============================================================================
+
+Common operations:
+
+    ee
+    es
+    se
+    ss
+
+-------------------------------------------------------------------------------
+
+Meaning:
+
+    ee
+        ephemeral <-> ephemeral
+
+    es
+        ephemeral <-> static
+
+    se
+        static <-> ephemeral
+
+    ss
+        static <-> static
+
+Each DH operation generates secret material.
+
+===============================================================================
+15. CHAINING KEY + HANDSHAKE HASH
+===============================================================================
+
+Noise internally maintains:
+
+    Chaining Key
+    Handshake Hash
+
+-------------------------------------------------------------------------------
+
+Chaining Key:
+    Evolves cryptographic state.
+
+Handshake Hash:
+    Tracks all handshake messages.
+
+Purpose:
+    Detect tampering
+    Ensure integrity
+
+===============================================================================
+16. CRYPTOKEY ROUTING
+===============================================================================
+
+Very important WireGuard concept.
+
+Traditional routing:
+
+    IP -> Interface
+
+WireGuard routing:
+
+    Public Key -> AllowedIPs
+
+-------------------------------------------------------------------------------
+
+AllowedIPs acts as:
+
+    1. Routing rule
+    2. Authorization rule
+
+-------------------------------------------------------------------------------
+
+Example:
+
+    AllowedIPs = 10.0.0.2/32
+
+Meaning:
+
+    - Send packets for 10.0.0.2 to this peer
+    - Peer allowed to claim only 10.0.0.2
+
+===============================================================================
+17. WIREGUARD AND XFRM
+===============================================================================
+
+IPsec uses:
+    XFRM subsystem
+
+Flow:
+
+    Packet
+      ↓
+    XFRM policy
+      ↓
+    ESP/AH transform
+      ↓
+    Encryption
+
+-------------------------------------------------------------------------------
+
+WireGuard does NOT use XFRM.
+
+WireGuard has:
+    - Its own crypto pipeline
+    - Own packet handling
+    - Own handshake system
+
+-------------------------------------------------------------------------------
+
+WireGuard flow:
+
+    Packet
+      ↓
+    wg0 interface
+      ↓
+    WireGuard crypto
+      ↓
+    UDP encapsulation
+
+===============================================================================
+18. WIREGUARD AND NETLINK
+===============================================================================
+
+WireGuard tools communicate with kernel using:
+
+    Netlink sockets
+
+-------------------------------------------------------------------------------
+
+Examples:
+
+    wg
+    wg-quick
+
+send:
+    Netlink messages
+
+to:
+    WireGuard kernel module
+
+-------------------------------------------------------------------------------
+
+Kernel module:
+
+    wireguard.ko
+
+===============================================================================
+19. WIREGUARD CONFIG EXAMPLE
+===============================================================================
+
+SERVER:
+
+[Interface]
+Address = 10.0.0.1/24
+ListenPort = 51820
+PrivateKey = SERVER_PRIVATE_KEY
+
+[Peer]
+PublicKey = CLIENT_PUBLIC_KEY
+AllowedIPs = 10.0.0.2/32
+
+-------------------------------------------------------------------------------
+
+CLIENT:
+
+[Interface]
+Address = 10.0.0.2/24
+PrivateKey = CLIENT_PRIVATE_KEY
+
+[Peer]
+PublicKey = SERVER_PUBLIC_KEY
+Endpoint = 1.2.3.4:51820
+AllowedIPs = 0.0.0.0/0
+PersistentKeepalive = 25
+
+===============================================================================
+20. FULL TUNNEL VS SPLIT TUNNEL
+===============================================================================
+
+SPLIT TUNNEL:
+
+    AllowedIPs = 10.0.0.0/24
+
+Only office traffic goes through VPN.
+
+-------------------------------------------------------------------------------
+
+FULL TUNNEL:
+
+    AllowedIPs = 0.0.0.0/0
+
+All traffic goes through VPN.
+
+===============================================================================
+21. WIREGUARD COMMANDS
+===============================================================================
+
+Install:
+
+    sudo apt install wireguard
+
+-------------------------------------------------------------------------------
+
+Generate keys:
+
+    wg genkey | tee privatekey | wg pubkey > publickey
+
+-------------------------------------------------------------------------------
+
+Create interface:
+
+    sudo ip link add dev wg0 type wireguard
+
+-------------------------------------------------------------------------------
+
+Assign IP:
+
+    sudo ip addr add 10.0.0.1/24 dev wg0
+
+-------------------------------------------------------------------------------
+
+Bring interface up:
+
+    sudo ip link set up dev wg0
+
+-------------------------------------------------------------------------------
+
+Show status:
+
+    sudo wg show
+
+-------------------------------------------------------------------------------
+
+Bring tunnel up:
+
+    sudo wg-quick up wg0
+
+-------------------------------------------------------------------------------
+
+Bring tunnel down:
+
+    sudo wg-quick down wg0
+
+===============================================================================
+22. WHY WIREGUARD IS FAST
+===============================================================================
+
+Reasons:
+
+    - Small codebase
+    - Kernel integration
+    - Modern cryptography
+    - Minimal handshake
+    - Efficient packet processing
+    - UDP based
+
+===============================================================================
+23. NOISE + WIREGUARD COMPLETE MENTAL MODEL
+===============================================================================
+
+WireGuard:
+    VPN implementation
+
+Noise:
+    Handshake framework used by WireGuard
+
+-------------------------------------------------------------------------------
+
+Noise provides:
+    - Authentication structure
+    - Key exchange
+    - Session establishment
+
+WireGuard provides:
+    - VPN interface
+    - Packet transport
+    - Routing integration
+    - Encrypted tunneling
+
+-------------------------------------------------------------------------------
+
+Complete flow:
+
+Application
+    ↓
+TCP/IP Stack
+    ↓
+wg0 interface
+    ↓
+Noise Handshake
+    ↓
+Session Keys Derived
+    ↓
+ChaCha20 Encryption
+    ↓
+UDP Encapsulation
+    ↓
+Internet
+    ↓
+Remote Peer
+    ↓
+Decryption
+    ↓
+Remote Network Stack
+
+===============================================================================
+24. FINAL ONE-LINE DEFINITIONS
+===============================================================================
+
+WireGuard:
+
+    Modern lightweight kernel-based VPN using Noise protocol
+    and modern cryptography for secure encrypted tunneling.
+
+-------------------------------------------------------------------------------
+
+Noise Protocol Framework:
+
+    Modular cryptographic handshake framework used to build
+    secure authenticated encrypted communication protocols.
+
+-------------------------------------------------------------------------------
+
+Authentication in WireGuard:
+
+    Peers authenticate by proving possession of private keys
+    without ever transmitting those private keys.
+
+-------------------------------------------------------------------------------
+
+Forward Secrecy:
+
+    Old encrypted sessions remain secure even if long-term
+    keys are compromised later.
+
+-------------------------------------------------------------------------------
+
+Cryptokey Routing:
+
+    WireGuard maps public-key identities directly to allowed IPs
+    for routing and authorization.
+
+################################################################################
+# END
+################################################################################
